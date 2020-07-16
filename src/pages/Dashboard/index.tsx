@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Image, ScrollView } from 'react-native';
 
 import Icon from 'react-native-vector-icons/Feather';
@@ -35,6 +35,7 @@ interface Food {
   price: number;
   thumbnail_url: string;
   formattedPrice: string;
+  category: number;
 }
 
 interface Category {
@@ -45,36 +46,58 @@ interface Category {
 
 const Dashboard: React.FC = () => {
   const [foods, setFoods] = useState<Food[]>([]);
+  const [searchValue, setSearchValue] = useState('');
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<
     number | undefined
   >();
-  const [searchValue, setSearchValue] = useState('');
 
   const navigation = useNavigation();
 
-  async function handleNavigate(id: number): Promise<void> {
-    // Navigate do ProductDetails page
-  }
+  const handleNavigate = useCallback(
+    (id: number): void => {
+      return navigation.navigate('FoodDetails', { id });
+    },
+    [navigation],
+  );
+
+  useEffect(() => {
+    async function loadCategories(): Promise<void> {
+      const { data } = await api.get('/categories');
+      setCategories(data);
+    }
+    loadCategories();
+  }, []);
 
   useEffect(() => {
     async function loadFoods(): Promise<void> {
-      // Load Foods from API
+      const { data } = await api.get<Food[]>('/foods', {
+        params: {
+          category_like: selectedCategory,
+          name_like: searchValue,
+        },
+      });
+
+      const foodList: Food[] = data.map((food: Food) => {
+        return { ...food, formattedPrice: formatValue(food.price) };
+      });
+
+      const foodSortList = foodList.sort((a, b) => {
+        if (a.name < b.name) return -1;
+        if (a.name > b.name) return 1;
+        return 0;
+      });
+
+      setFoods(foodSortList);
     }
 
     loadFoods();
   }, [selectedCategory, searchValue]);
 
-  useEffect(() => {
-    async function loadCategories(): Promise<void> {
-      // Load categories from API
-    }
-
-    loadCategories();
-  }, []);
-
   function handleSelectCategory(id: number): void {
-    // Select / deselect category
+    id === selectedCategory
+      ? setSelectedCategory(undefined)
+      : setSelectedCategory(id);
   }
 
   return (
@@ -92,6 +115,8 @@ const Dashboard: React.FC = () => {
         <SearchInput
           value={searchValue}
           onChangeText={setSearchValue}
+          autoCapitalize="none"
+          autoCorrect={false}
           placeholder="Qual comida você procura?"
         />
       </FilterContainer>
